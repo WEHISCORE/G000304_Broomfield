@@ -1,0 +1,13 @@
+[Header],,
+Investigator_Name,Ben_Broomfield,
+Project_Name,G000304,
+Experiment_Name,G000304_S000373,
+Date,09/02/23,
+Workflow,GenerateFASTQ,
+,,
+[Data],,
+Sample_ID,Sample_Name,index
+G000304_1_ADT,G000304_1_ADT,CCGTCCAT
+G000304_2_ADT,G000304_2_ADT,GTCCGCAT
+G000304_1_HTO,G000304_1_HTO,ATTACTCG
+G000304_2_HTO,G000304_2_HTO,TCCGGAGA
