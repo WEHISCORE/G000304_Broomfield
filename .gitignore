@@ -5,3 +5,4 @@
 extdata
 !extdata/S000*
 tmp/
+*.out
