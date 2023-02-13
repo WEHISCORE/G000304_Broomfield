@@ -2,3 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
+extdata
+!extdata/S000*

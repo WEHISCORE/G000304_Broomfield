@@ -1,0 +1,85 @@
+---
+title: "features.csv"
+output: github_document
+author: Peter Hickey 
+date: "`r Sys.Date()`"
+---
+
+**CellRanger** requires a CSV file describing the antibody derived tag (ADT) and hashtag oligo (HTO) features, which we refer to as `features.csv`.
+The `features.csv` file is the concatenation of a `ADT_features.csv` and a `HTO_features.csv` file.
+
+This document briefly describes how we generated the `features.csv` file.
+
+## `ADT_features.csv`
+
+We used the [TotalSeq™-A Mouse Universal Cocktail, V1.0](https://www.biolegend.com/ja-jp/products/totalseq-a-mouse-universal-cocktail-v1-21733) from BioLegend.
+All antibodies are anti-mouse unless otherwise specified.
+The associated metadata for this panel is available in the Excel file [`TotalSeq_A_Mouse_Universal_Cocktail_v1_128_Antibodies_199901_Barcodes.xlsx`](TotalSeq_A_Mouse_Universal_Cocktail_v1_128_Antibodies_199901_Barcodes.xlsx) (source: [BioLegend](https://www.biolegend.com/Files/Images/BioLegend/totalseq/TotalSeq_A_Mouse_Universal_Cocktail_v1_128_Antibodies_199901_Barcodes.xlsx)):
+
+```{r}
+library(here)
+library(readxl)
+x <- read_excel(
+  here(
+    "data", 
+    "sample_sheets",
+    "TotalSeq_A_Mouse_Universal_Cocktail_v1_128_Antibodies_199901_Barcodes.xlsx"))
+knitr::kable(x)
+```
+
+I have used the information in `TotalSeq_A_Mouse_Universal_Cocktail_v1_128_Antibodies_199901_Barcodes.xlsx` to create a [`ADT_features.csv`](ADT_features.csv) file that is compatible with **CellRanger**.
+
+```{r}
+y <- data.frame(
+  id = x$DNA_ID,
+  # NOTE: Tidy up to remove most "anti-mouse" (and variations thereon) prefixes
+  #       and replace ",", with ";" to avoid parsing issues of the resultant 
+  #       CSV.
+  name = gsub(",", ";", gsub("anti-mouse ", "", x$Description)),
+  read = rep("R2", nrow(x)),
+  pattern = rep("^(BC)", nrow(x)),
+  sequence = x$Sequence,
+  feature_type = rep("Antibody Capture", nrow(x)))
+write.csv(
+  y,
+  file = here("data", "sample_sheets", "ADT_features.csv"),
+  row.names = FALSE,
+  quote = TRUE)
+knitr::kable(y)
+```
+
+## `HTO_features.csv`
+
+There are 27 pools of samples and each has a unique HTO label.
+Specifically, we used combinatorial HTO labelling whereby each pool is labelled with k HTOs (here k=2):
+
+```{r}
+# TODO: Update once Ben supplies updated sample metadata XLSX.
+sample_metadata_df <- read_excel(
+  here("data/sample_sheets/G000304_Broomfield.sample_metadata.xlsx"))
+knitr::kable(sample_metadata_df)
+```
+
+Based on this, I constructed a `HTO_features.csv` file for use with **CellRanger**.
+
+```{r}
+z <- read.csv(here("data/sample_sheets/HTO_features.csv"))
+# NOTE: `feature_type` must be 'Antibody Capture' rather than 
+#       'Multiplexing Capture' because we're not actually using CellRanger's 
+#       demultiplexing feature.
+z$feature_type <- "Antibody Capture"
+knitr::kable(z)
+```
+
+## `features.csv`
+
+We concatenate `ADT_features.csv` and `HTO_features.csv` to generate `features.csv`.
+
+```{r}
+features <- rbind(y, z)
+write.csv(
+  features,
+  file = here("data", "sample_sheets", "features.csv"),
+  row.names = FALSE,
+  quote = TRUE)
+```

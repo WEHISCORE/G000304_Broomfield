@@ -1,0 +1,16 @@
+id,name,read,pattern,sequence,feature_type
+Mouse_HTO_1,Mouse_HTO_1,R2,5P(BC),ACCCACCAGTAAGAC,Multiplexing Capture
+Mouse_HTO_2,Mouse_HTO_2,R2,5P(BC),GGTCGAGAGCATTCA,Multiplexing Capture
+Mouse_HTO_3,Mouse_HTO_3,R2,5P(BC),CTTGCCGCATGTCAT,Multiplexing Capture
+Mouse_HTO_4,Mouse_HTO_4,R2,5P(BC),AAAGCATTCTTCACG,Multiplexing Capture
+Mouse_HTO_5,Mouse_HTO_5,R2,5P(BC),CTTTGTCTTTGTGAG,Multiplexing Capture
+Mouse_HTO_6,Mouse_HTO_6,R2,5P(BC),TATGCTGCCACGGTA,Multiplexing Capture
+Mouse_HTO_7,Mouse_HTO_7,R2,5P(BC),GAGTCTGCCAGTATC,Multiplexing Capture
+Mouse_HTO_8,Mouse_HTO_8,R2,5P(BC),TATAGAACGCCAGGC,Multiplexing Capture
+Mouse_HTO_9,Mouse_HTO_9,R2,5P(BC),TGCCTATGAAACAAG,Multiplexing Capture
+Mouse_HTO_10,Mouse_HTO_10,R2,5P(BC),CCGATTGTAACAGAC,Multiplexing Capture
+Mouse_HTO_11,Mouse_HTO_11,R2,5P(BC),GCTTACCGAATTAAC,Multiplexing Capture
+Mouse_HTO_12,Mouse_HTO_12,R2,5P(BC),CTGCAAATATAACGG,Multiplexing Capture
+Mouse_HTO_13,Mouse_HTO_13,R2,5P(BC),CTACATTGCGATTTG,Multiplexing Capture
+Mouse_HTO_14,Mouse_HTO_14,R2,5P(BC),CTTTCGCCAACTCTG,Multiplexing Capture
+Mouse_HTO_15,Mouse_HTO_15,R2,5P(BC),CCCTCTCTGGATTCT,Multiplexing Capture
