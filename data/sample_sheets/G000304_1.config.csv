@@ -1,0 +1,11 @@
+[gene-expression]
+reference,/stornext/Projects/score/Indexes/refdata-gex-mm10-2020-A
+
+[feature]
+reference,/stornext/Projects/score/Analyses/G000304_Broomfield/data/sample_sheets/features.csv
+
+[libraries]
+fastq_id,fastqs,feature_types
+G000304_1_GEX,/stornext/Projects/score/2023_Sequencing_Runs/S000373/data/fastq_GEX/AAAVCJCHV/outs/fastq_path/AAAVCJCHV,Gene Expression
+G000304_1_ADT,/stornext/Projects/score/2023_Sequencing_Runs/S000373/data/fastq_ADT_HTO,Antibody Capture
+G000304_1_HTO,/stornext/Projects/score/2023_Sequencing_Runs/S000373/data/fastq_ADT_HTO,Antibody Capture
