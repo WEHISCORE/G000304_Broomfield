@@ -13,7 +13,7 @@
 # Peter Hickey
 # 2023-08-13
 
-# NOTE: This was sample was captured over 1 GEM wells (G000304_1,
+# NOTE: This was sample was captured over 2 GEM wells (G000304_1,
 #       G000304_2) and sequenced over 1 Illumina run:
 #
 #       1. S000373: GEX, ADT, and HTO of G000304_1 and G000304_2
