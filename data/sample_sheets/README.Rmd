@@ -50,7 +50,7 @@ knitr::kable(y)
 
 ## `HTO_features.csv`
 
-There are 27 pools of samples (although not all were progresed to scRNA-seq) and each has a unique HTO label
+There are 27 samples (although not all were progressed to scRNA-seq) and each has a unique HTO label.
 Specifically, we used combinatorial HTO labelling whereby each pool is labelled with k HTOs (here k=2):
 
 ```{r}

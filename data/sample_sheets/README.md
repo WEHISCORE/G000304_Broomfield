@@ -326,10 +326,9 @@ knitr::kable(y)
 
 ## `HTO_features.csv`
 
-There are 27 pools of samples (although not all were progresed to
-scRNA-seq) and each has a unique HTO label Specifically, we used
-combinatorial HTO labelling whereby each pool is labelled with k HTOs
-(here k=2):
+There are 27 samples (although not all were progressed to scRNA-seq) and
+each has a unique HTO label. Specifically, we used combinatorial HTO
+labelling whereby each pool is labelled with k HTOs (here k=2):
 
 ``` r
 sample_metadata_df <- read_excel(
@@ -342,7 +341,7 @@ knitr::kable(sample_metadata_df)
 |    1 |         1 |         2 | 5899      | TRUE                    |
 |    2 |         2 |         3 | 5900      | TRUE                    |
 |    3 |         3 |         4 | 5901      | TRUE                    |
-|    4 |         4 |         5 | NA        | FALSE                   |
+|    4 |         4 |         5 | removed_1 | FALSE                   |
 |    5 |         5 |         6 | 5903      | TRUE                    |
 |    6 |         6 |         7 | 5904      | TRUE                    |
 |    7 |         7 |         8 | 5905      | TRUE                    |
@@ -350,16 +349,16 @@ knitr::kable(sample_metadata_df)
 |    9 |         9 |        10 | 5908      | TRUE                    |
 |   10 |        10 |        11 | 5909      | TRUE                    |
 |   11 |        11 |        12 | 5910      | TRUE                    |
-|   12 |        12 |        13 | NA        | FALSE                   |
+|   12 |        12 |        13 | removed_2 | FALSE                   |
 |   13 |        13 |        14 | 5914      | TRUE                    |
 |   14 |        14 |        15 | 5915      | TRUE                    |
 |   15 |        15 |         1 | 5916      | TRUE                    |
-|   16 |         1 |         3 | NA        | FALSE                   |
-|   17 |         2 |         4 | NA        | FALSE                   |
-|   18 |         5 |         7 | NA        | FALSE                   |
+|   16 |         1 |         3 | removed_3 | FALSE                   |
+|   17 |         2 |         4 | removed_4 | FALSE                   |
+|   18 |         5 |         7 | removed_5 | FALSE                   |
 |   19 |         6 |         8 | 5912      | TRUE                    |
 |   20 |         9 |        11 | 5913      | TRUE                    |
-|   21 |        10 |        12 | NA        | FALSE                   |
+|   21 |        10 |        12 | removed_6 | FALSE                   |
 |   22 |        13 |        15 | 5921      | TRUE                    |
 |   23 |         1 |         8 | 5922      | TRUE                    |
 |   24 |         2 |         9 | 5923      | TRUE                    |
