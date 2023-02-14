@@ -1,0 +1,23 @@
+name: "G000304_Broomfield"
+output_dir: "../docs"
+navbar:
+  title: "G000304"
+  left:
+    - text: "Demultiplexing"
+      href: G000304_Broomfield.demultiplex.html
+    - text: "Preprocessing"
+      href: G000304_Broomfield.preprocess.html
+    - text: "Cell selection"
+      href: G000304_Broomfield.cell_selection.html
+    - text: "Supplementary files"
+      menu:
+        - text: "CellRanger reports"
+          href: ../output/CellRanger/
+  right:
+    - icon: fa-github
+      href: https://github.com/WEHISCORE/G000304_Broomfield
+output:
+  distill::distill_article:
+    toc: true
+    toc_depth: 3
+    code_folding: true

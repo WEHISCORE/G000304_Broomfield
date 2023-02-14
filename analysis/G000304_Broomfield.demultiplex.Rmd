@@ -1,0 +1,830 @@
+---
+title: "Demultiplexing the G000304_Broomfield data set"
+description: |
+author:
+  - name: Peter Hickey 
+    url: https://peterhickey.org
+    affiliation: Cellular Genomics Projects Team (formerly SCORE), WEHI
+    affiliation_url: https://www.wehi.edu.au/people/rory-bowden/4536/wehi-advanced-genomics-facility
+date: "`r Sys.Date()`"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+library(here)
+library(readxl)
+library(grDevices)
+library(ggplot2)
+library(cowplot)
+library(patchwork)
+library(DropletUtils)
+library(demuxmix)
+library(scater)
+library(vcfR)
+
+source(here("code", "md5-utils.R"))
+
+knitr::opts_chunk$set(fig.path = "G000304_Broomfield.demultiplex_files/")
+
+# NOTE: The following is a workaround to the lack of support for tabsets in 
+#       distill (see https://github.com/rstudio/distill/issues/11 and 
+#       https://github.com/rstudio/distill/issues/11#issuecomment-692142414 in 
+#       particular).
+xaringanExtra::use_panelset()
+```
+
+# Overview
+
+This analysis is an abbreviated/less-documented version of SCORE's standard demultiplexing analysis.
+
+# Motivation
+
+There are 27 samples (although not all were progressed to scRNA-seq) and each has a unique HTO label.
+We used combinatorial HTO labelling whereby each sample is labelled with k HTOs (here k=2), shown below:
+
+```{r}
+# TODO: How to handle samples that didn't progress? Keep them in for now to 
+#       double-check in HTO demuxing.
+sample_metadata_df <- read_excel(
+  here("data/sample_sheets/G000304_Broomfield.sample_metadata.xlsx"))
+
+# A bit of faffing to get it as a list column in the form I've used for other 
+# projects.
+sample_metadata_df$`Hashtag(s)` <- paste0(
+  sample_metadata_df$`HashTag 1`, 
+  ",",
+  sample_metadata_df$`HashTag 2`)
+sample_metadata_df$`Hashtag(s)` <- lapply(
+  strsplit(
+    sample_metadata_df$`Hashtag(s)`, 
+    ","),
+  function(x) paste0("Mouse_HTO_", x))
+
+# NOTE: Using `pool` in variable name even though here pool == sample.
+hashtag_pool_df <- unique(sample_metadata_df[, c("Sample", "Hashtag(s)")])
+hashtag_pool_df <- hashtag_pool_df[order(hashtag_pool_df$Sample), ]
+
+# A bunch of faffing to get the table to print as I want.
+# TODO: Want actual sample IDs for `removed_*` samples.
+hashtag_pool_df |>
+  dplyr::group_by(Sample) |>
+  dplyr::mutate(
+    `Hashtag(s)` = paste0(unlist(`Hashtag(s)`), collapse =  ",")) |>
+  knitr::kable()
+```
+
+We want to demultiplex the droplets using the HTO data.
+
+# Setting up the data
+
+```{r}
+# Load data
+sce <- readRDSWithMD5(
+  here("extdata", "SCEs", "G000304_Broomfield.CellRanger.SCE.rds"))
+
+# Tidy up colData
+sce$Capture <- factor(sce$Sample)
+capture_names <- levels(sce$Capture)
+capture_names <- setNames(capture_names, capture_names)
+sce$Sample <- NULL
+
+# Tidy up altExps
+is_adt <- grepl("^A[0-9]+", rownames(altExp(sce, "Antibody Capture")))
+is_hto <- grepl("^Mouse_HTO", rownames(altExp(sce, "Antibody Capture")))
+altExp(sce, "HTO") <- altExp(sce, "Antibody Capture")[is_hto, ]
+altExp(sce, "ADT") <- altExp(sce, "Antibody Capture")[is_adt, ]
+altExp(sce, "Antibody Capture") <- NULL
+```
+
+# Calling cells from empty droplets
+
+## Barcode rank plots
+
+::::: {.panelset}
+
+::: {.panel}
+
+### GEX {.panel-name}
+
+```{r}
+#| gex-rankplot, 
+#| fig.cap = "Total UMI count of GEX assay for each barcode, plotted against 
+#|   its rank (in decreasing order of total counts), in each capture. The 
+#|   inferred locations of the inflection (dark green dashed lines) and knee 
+#|   points (blue dashed lines) are also shown.", 
+#| fig.asp = 1 / 2,
+#| results = "hide"
+
+ylim <- c(1, 1.1 * max(colSums(counts(sce))))
+par(mfrow = c(1, 2))
+lapply(capture_names, function(cn) {
+  sce <- sce[, sce$Capture == cn]
+  bcrank <- barcodeRanks(counts(sce))
+  # Only showing unique points for plotting speed.
+  uniq <- !duplicated(bcrank$rank)
+  plot(
+    x = bcrank$rank[uniq],
+    y = bcrank$total[uniq],
+    log = "xy",
+    xlab = "Rank",
+    ylab = "Total UMI count",
+    main = paste0("GEX: ", cn),
+    cex.lab = 1.2,
+    xlim = c(1, 500000),
+    ylim = ylim)
+  abline(h = metadata(bcrank)$inflection, col = "darkgreen", lty = 2)
+  abline(h = metadata(bcrank)$knee, col = "dodgerblue", lty = 2)
+})
+```
+
+:::
+
+::: {.panel}
+
+### HTO {.panel-name}
+
+```{r}
+#| hto-rankplot, 
+#| fig.cap = "Total UMI count of HTO assay for each barcode, plotted against 
+#|   its rank (in decreasing order of total counts), in each capture. The 
+#|   inferred locations of the inflection (dark green dashed lines) and knee 
+#|   points (blue dashed lines) are also shown.", 
+#| fig.asp = 1 / 2,
+#| results = "hide"
+
+ylim <- c(1, 1.1 * max(colSums(counts(altExp(sce, "HTO")))))
+par(mfrow = c(1, 2))
+lapply(capture_names, function(cn) {
+  sce <- sce[, sce$Capture == cn]
+  bcrank <- barcodeRanks(counts(altExp(sce, "HTO")))
+  # Only showing unique points for plotting speed.
+  uniq <- !duplicated(bcrank$rank)
+  plot(
+    x = bcrank$rank[uniq],
+    y = bcrank$total[uniq],
+    log = "xy",
+    xlab = "Rank",
+    ylab = "Total UMI count",
+    main = paste0("HTO: ", cn),
+    cex.lab = 1.2,
+    xlim = c(1, 500000),
+    ylim = ylim)
+  abline(h = metadata(bcrank)$inflection, col = "darkgreen", lty = 2)
+  abline(h = metadata(bcrank)$knee, col = "dodgerblue", lty = 2)
+})
+```
+
+:::
+
+::: {.panel}
+
+### ADT {.panel-name}
+
+```{r}
+#| adt-rankplot, 
+#| fig.cap = "Total UMI count of ADT assay for each barcode, plotted against 
+#|   its rank (in decreasing order of total counts), in each capture. The 
+#|   inferred locations of the inflection (dark green dashed lines) and knee 
+#|   points (blue dashed lines) are also shown.", 
+#| fig.asp = 1 / 2,
+#| results = "hide"
+
+ylim <- c(1, 1.1 * max(colSums(counts(altExp(sce, "ADT")))))
+par(mfrow = c(1, 2))
+lapply(capture_names, function(cn) {
+  sce <- sce[, sce$Capture == cn]
+  bcrank <- barcodeRanks(counts(altExp(sce, "ADT")))
+  # Only showing unique points for plotting speed.
+  uniq <- !duplicated(bcrank$rank)
+  plot(
+    x = bcrank$rank[uniq],
+    y = bcrank$total[uniq],
+    log = "xy",
+    xlab = "Rank",
+    ylab = "Total UMI count",
+    main = paste0("ADT: ", cn),
+    cex.lab = 1.2,
+    xlim = c(1, 500000),
+    ylim = ylim)
+  abline(h = metadata(bcrank)$inflection, col = "darkgreen", lty = 2)
+  abline(h = metadata(bcrank)$knee, col = "dodgerblue", lty = 2)
+})
+```
+
+:::
+
+:::::
+
+## Empty droplet detection
+
+```{r}
+empties <- do.call(rbind, lapply(capture_names, function(cn) {
+  message(cn)
+  empties <- readRDS(
+    here("extdata", "emptyDrops", paste0(cn, ".emptyDrops.rds")))
+  empties$Capture <- cn
+  empties
+}))
+sce_empties <- sce[, -which(empties$FDR <= 0.001)]
+sce <- sce[, which(empties$FDR <= 0.001)]
+```
+
+```{r}
+data.frame(
+  n = tapply(
+    empties$FDR,
+    empties$Capture,
+    function(x) sum(x <= 0.001, na.rm = TRUE))) |>
+  knitr::kable(
+    caption = "Number of non-empty droplets identified using `emptyDrops()` from **DropletUtils**.",
+    format.args = list(big.mark = ","))
+```
+
+The number of non-empty droplets is in-line with expectations.
+
+# Demultiplexing with hashtag oligos (HTOs)
+
+## Raw data
+
+```{r}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...) {
+  usr <- par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- cor(x, y)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  if (missing(cex.cor)) cex.cor <- 0.8 / strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+# NOTE: A modified .smoothScatter() to allow desired specification of xlim and 
+#       ylim 
+#       (see https://stat.ethz.ch/pipermail/r-help/2010-February/227374.html)
+.smoothScatter <- function(x, y = NULL, nbin = 128, bandwidth, 
+                           colramp = colorRampPalette(c("white", blues9)),
+                           nrpoints = 100, ret.selection = FALSE, pch = ".", 
+                           cex = 1, col = "black",
+                           transformation = function(x) x^0.25, 
+                           postPlotHook = box, xlab = NULL, ylab = NULL,
+                           xlim, ylim, 
+                           xaxs = par("xaxs"), yaxs = par("yaxs"), ...) {
+  if (!is.numeric(nrpoints) || nrpoints < 0 || length(nrpoints) != 1) 
+    stop("'nrpoints' should be numeric scalar with value >= 0.")
+  nrpoints <- round(nrpoints)
+  ret.selection <- ret.selection && nrpoints > 0
+  xlabel <- if (!missing(x)) 
+    deparse1(substitute(x))
+  ylabel <- if (!missing(y)) 
+    deparse1(substitute(y))
+  xy <- xy.coords(x, y, xlabel, ylabel)
+  xlab <- if (is.null(xlab)) 
+    xy$xlab
+  else xlab
+  ylab <- if (is.null(ylab)) 
+    xy$ylab
+  else ylab
+  x <- cbind(xy$x, xy$y)[I <- is.finite(xy$x) & is.finite(xy$y), 
+                         , drop = FALSE]
+  if (ret.selection) 
+    iS <- which(I)
+  if (!missing(xlim)) {
+    stopifnot(is.numeric(xlim), length(xlim) == 2, is.finite(xlim))
+    x <- x[I <- min(xlim) <= x[, 1] & x[, 1] <= max(xlim), 
+           , drop = FALSE]
+    if (ret.selection) 
+      iS <- iS[I]
+  }
+  else {
+    xlim <- range(x[, 1])
+  }
+  if (!missing(ylim)) {
+    stopifnot(is.numeric(ylim), length(ylim) == 2, is.finite(ylim))
+    x <- x[I <- min(ylim) <= x[, 2] & x[, 2] <= max(ylim), 
+           , drop = FALSE]
+    if (ret.selection) 
+      iS <- iS[I]
+  }
+  else {
+    ylim <- range(x[, 2])
+  }
+  # NOTE: This is the changed line.
+  map <- grDevices:::.smoothScatterCalcDensity(x, nbin, bandwidth, list(xlim, ylim))
+  xm <- map$x1
+  ym <- map$x2
+  dens <- map$fhat
+  dens[] <- transformation(dens)
+  image(xm, ym, z = dens, col = colramp(256), xlab = xlab, 
+        ylab = ylab, xlim = xlim, ylim = ylim, xaxs = xaxs, yaxs = yaxs, 
+        ...)
+  if (!is.null(postPlotHook)) 
+    postPlotHook()
+  if (nrpoints > 0) {
+    nrpoints <- min(nrow(x), ceiling(nrpoints))
+    stopifnot((nx <- length(xm)) == nrow(dens), (ny <- length(ym)) == 
+                ncol(dens))
+    ixm <- 1L + as.integer((nx - 1) * (x[, 1] - xm[1])/(xm[nx] - 
+                                                          xm[1]))
+    iym <- 1L + as.integer((ny - 1) * (x[, 2] - ym[1])/(ym[ny] - 
+                                                          ym[1]))
+    sel <- order(dens[cbind(ixm, iym)])[seq_len(nrpoints)]
+    x <- x[sel, , drop = FALSE]
+    points(x, pch = pch, cex = cex, col = col)
+    if (ret.selection) 
+      iS[sel]
+  }
+}
+
+panel.smoothScatter <- function(x, y, ...) {
+  .smoothScatter(
+    x, 
+    y, 
+    add = TRUE, 
+    colramp = viridisLite::inferno, 
+    nrpoints = 0,
+    ...)
+}
+
+panel.hist <- function(x, xlim, ...) {
+  usr <- par("usr")
+  on.exit(par(usr))
+  par(usr = c(usr[1:2], 0, 1.5))
+  xmax <- xlim[2]
+  h <- hist(x, plot = FALSE, breaks = seq(0, xmax, 0.5))
+  breaks <- h$breaks
+  nB <- length(breaks)
+  y <- h$counts
+  y <- y / max(y)
+  plot.window(xlim = c(0, xmax), ylim = 1.3 * range(y, 0), "")
+  rect(breaks[-nB], 0, breaks[-1], y, col = "grey50")
+}
+```
+
+```{r}
+xmax <- ceiling(log2(max(counts(altExp(sce, "HTO"))) + 1))
+```
+
+::::: {.panelset}
+
+::: {.panel}
+
+**TODO** Need to re-write because HTOs are reused so the diagonal is less strong and harder to interpret.
+
+Figures \@ref(fig:hto-scatterplot-matrix-1) - \@ref(fig:hto-scatterplot-matrix-2) show that the HTO data are high-quality (e.g., good separation of background and signal in the histograms along the diagonal of these figures, high correlation of paired HTOs).
+
+### G000304_1 {.panel-name}
+
+```{r}
+#| hto-scatterplot-matrix-1,
+#| fig.asp = 1,
+#| fig.cap = "Scatterplot matrix showing log2(UMI + 1) for each pair 
+#|   of HTOs as a scatterplot with smooth densities in the lower triangle, 
+#|   marginal density plots on the diagonal, and Pearson correlations printed 
+#|   in the upper triangle, for all non-empty droplets in this capture."
+
+x <- log2(t(counts(altExp(sce, "HTO"))[, sce$Capture == "G000304_1"]) + 1)
+pairs(
+  x = as.matrix(x),
+  lower.panel = panel.smoothScatter,
+  diag.panel = panel.hist,
+  upper.panel = panel.cor,
+  gap = 0,
+  main = "G000304_1: log2(UMI + 1)",
+  xlim = c(0, xmax),
+  ylim = c(0, xmax),
+  cex.axis = 0.8,
+  cex.labels = 0.6)
+```
+
+:::
+
+::: {.panel}
+
+### G000304_2 {.panel-name}
+
+```{r}
+#| hto-scatterplot-matrix-2,
+#| fig.asp = 1,
+#| fig.cap = "Scatterplot matrix showing log2(UMI + 1) for each pair 
+#|   of HTOs as a scatterplot with smooth densities in the lower triangle, 
+#|   marginal density plots on the diagonal, and Pearson correlations printed 
+#|   in the upper triangle, for all non-empty droplets in this capture."
+
+x <- log2(t(counts(altExp(sce, "HTO"))[, sce$Capture == "G000304_2"]) + 1)
+pairs(
+  x = as.matrix(x),
+  lower.panel = panel.smoothScatter,
+  diag.panel = panel.hist,
+  upper.panel = panel.cor,
+  gap = 0,
+  main = "G000304_2: log2(UMI + 1)",
+  xlim = c(0, xmax),
+  ylim = c(0, xmax),
+  cex.axis = 0.8,
+  cex.labels = 0.6)
+```
+
+:::
+
+:::::
+
+## Results
+
+We apply the `demuxmix::demuxmix()` method to each of the captures separately.
+
+```{r}
+hto <- counts(altExp(sce, "HTO"))
+rna <- colSums(counts(sce) > 0)
+```
+
+```{r}
+set.seed(620)
+list_of_dmm <- lapply(capture_names, function(cn) {
+  message(cn)
+  demuxmix(
+    hto = as.matrix(hto[, sce$Capture == cn]),
+    rna = rna[sce$Capture == cn],
+    # NOTE: Usually have used `model = "auto"` but this generated an error when 
+    #       processing `G000304_2`, namely:
+    #       In addition: Warning messages:
+    #       1: In theta.ml(Y, mu, sum(w), w, limit = control$maxit, trace = control$trace >  :
+    #         iteration limit reached
+    #       2: In theta.ml(Y, mu, sum(w), w, limit = control$maxit, trace = control$trace >  :
+    #         iteration limit reached.
+    #       
+    #       Stepping through demuxmix() line-by-line, this breaks when 
+    #       processing 'Mouse_HTO_4', specifically the `mmReg` line (https://github.com/huklein/demuxmix/blob/master/R/demuxmix.R#L516-L523).
+    #       
+    #       Opted to specify `model = "naive"` because all HTOs in `G000304_1`
+    #       end up picking the naive model when run with `model = "auto"` 
+    #       anyway.
+    model = "naive")
+})
+```
+
+```{r}
+# Idea of classification is to get a 'best' guess by setting the pApt() to 
+# zero, which forces the classification of all droplets. Then, assign a 
+# `Confident` TRUE/FALSE value based on whether the same classification is 
+# achieved with the default classification.
+list_of_demuxmix <- lapply(
+  list_of_dmm, 
+  function(dmm) {
+    pAcpt(dmm) <- 0
+    dmmClassify(dmm)
+  })
+demuxmix_df <- do.call(
+  rbind, 
+  lapply(list_of_demuxmix, as, "DataFrame"))
+```
+
+```{r}
+# NOTE: Can't apply our usual trick of assigning samples to their best single 
+#       HTO because HTOs are re-used across samples.
+valid_hto_combos_df <- hashtag_pool_df |>
+  dplyr::mutate(
+    Pool = Sample, 
+    Sample = NULL,
+    first_hashtag = sapply(`Hashtag(s)`, "[[", 1),
+    second_hashtag = sapply(`Hashtag(s)`, "[[", 2),
+    `Hashtag(s)` = NULL) |>
+  dplyr::arrange(Pool) |>
+  dplyr::rowwise() |>
+  dplyr::summarise(
+    Pool = rep(as.character(Pool), 1),
+    Type = rep(c("multiplet")),
+    HTO = c(
+      paste0(first_hashtag, ",", second_hashtag))) |>
+  as.data.frame()
+```
+
+The following table summarises the 'valid' HTO demultiplexing results, i.e. which combination of HTOs defines each sample.
+
+```{r}
+knitr::kable(valid_hto_combos_df, caption = "Valid HTO combinations.")
+```
+
+**TODO** Re-write
+
+Here, we have used **demuxmix**'s default acceptance probability of `pAcpt` $= 0.9 ^ {n_{HTOs}}$ = `r round(0.9^nrow(hto), 2)`.
+We might consider increasing the acceptance probability, e.g., to `pAcpt` $= 0.9 ^ {n_{HTO pools}}$ = `r round(0.9^length(unique(valid_hto_combos_df$Pool)), 2)`.
+However, increasing the acceptance probability will increase the number of `uncertain` or `negative`-assigned droplets, in this case from `r scales::number(sum(demuxmix_df$Prob < 0.9^nrow(hto)), big.mark = ",")` to `r scales::number(sum(demuxmix_df$Prob < 0.9^length(unique(valid_hto_combos_df$Pool))), big.mark = ",")`.
+
+<aside>
+Please see [https://github.com/huklein/demuxmix/issues/2#issuecomment-1241026309](https://github.com/huklein/demuxmix/issues/2#issuecomment-1241026309) for a discussion on the default acceptance probability and the effect of changing it.
+</aside>
+
+```{r}
+demuxmix_df$Best <- factor(
+  ifelse(
+    demuxmix_df$HTO %in% valid_hto_combos_df$HTO,
+    valid_hto_combos_df[
+      match(demuxmix_df$HTO, valid_hto_combos_df$HTO), "Pool"],
+    demuxmix_df$Type),
+  levels = c(
+    unique(valid_hto_combos_df$Pool), 
+    "multiplet", "negative", "uncertain"))
+
+tmp <- do.call(c, lapply(list_of_dmm, function(dmm) {
+  classes <- dmmClassify(dmm)
+  classes$Prob > pAcpt(dmm)
+}))
+demuxmix_df$Confident <- tmp
+```
+
+::::: {.panelset}
+
+::: {.panel}
+
+### G000304_1 {.panel-name}
+
+```{r}
+#| demuxmix-histogram-1, 
+#| fig.cap = "Density histograms overlaid with mixture probability mass 
+#|   functions. The density histogram is shown for each HTO. The negative 
+#|   component of the respective mixture model representing the non-tagged 
+#|   cells (blue) and the positive component (red) are plotted on top of the 
+#|   histogram. The black curve is the mixture PMF. Note that the y-axis has 
+#|   been truncated, as advised in the **demuxmix** vignette, in order to try 
+#|   to show more of the red distribution.", 
+#|   results = "hide", 
+#|   fig.asp = 1
+
+capture <- "G000304_1"
+dmm <- list_of_dmm[[capture]]
+g <- lapply(rownames(altExp(sce, "HTO")), function(hto) {
+  plotDmmHistogram(dmm, hto)
+})
+plot_grid(
+  plotlist = lapply(
+    g, function(gg) 
+      gg + coord_cartesian(ylim = c(0, 0.001))),
+  ncol = 4) +
+  plot_annotation(title = capture)
+```
+
+:::
+
+::: {.panel}
+
+### G000304_2 {.panel-name}
+
+```{r}
+#| demuxmix-histogram-2, 
+#| fig.cap = "Density histograms overlaid with mixture probability mass 
+#|   functions. The density histogram is shown for each HTO. The negative 
+#|   component of the respective mixture model representing the non-tagged 
+#|   cells (blue) and the positive component (red) are plotted on top of the 
+#|   histogram. The black curve is the mixture PMF. Note that the y-axis has 
+#|   been truncated, as advised in the **demuxmix** vignette, in order to try 
+#|   to show more of the red distribution.", 
+#|   results = "hide", 
+#|   fig.asp = 1
+
+capture <- "G000304_2"
+dmm <- list_of_dmm[[capture]]
+g <- lapply(rownames(altExp(sce, "HTO")), function(hto) {
+  plotDmmHistogram(dmm, hto)
+})
+plot_grid(
+  plotlist = lapply(
+    g, function(gg) 
+      gg + coord_cartesian(ylim = c(0, 0.001))),
+  ncol = 4) +
+  plot_annotation(title = capture)
+```
+
+:::
+
+:::::
+
+## Summary
+
+```{r}
+# NOTE: We make a temporary SCE because:
+#       1. `plotHeatmap()` doesn't support `features` that are from an 
+#           alternative experiment.
+#       2. We need `logcounts` of the HTO data to make a heatmap, but we don't 
+#          (yet) want to store these in the main SCE (because we're doing some
+#          hacky stuff to get an okay-ish normalization of the HTO counts).
+tmp <- SingleCellExperiment(
+  assays = list(counts = counts(altExp(sce, "HTO"))),
+  colData = demuxmix_df)
+tmp$Capture <- sce$Capture
+sf <- librarySizeFactors(counts(tmp))
+# NOTE: Kludge to workaround non-positive size factors (corresponding to 
+#       droplets with zero HTO counts).
+sf <- pmax(sf, min(sf[sf > 0]))
+sizeFactors(tmp) <- sf
+tmp <- logNormCounts(tmp)
+tmp$Type <- factor(
+  tmp$Type, 
+  levels = c("multiplet", "singlet", "negative", "uncertain"))
+tmp$Confident <- factor(tmp$Confident, levels = c(TRUE, FALSE))
+
+# Sort columns as we want the heatmap to appear.
+tmp <- tmp[, order(tmp$Capture, tmp$Best, tmp$Confident, tmp$Type, -tmp$Prob)]
+```
+
+Figure \@ref(fig:hto-demultiplexing-demuxmix) shows consistent HTO demultiplexing results for `G000304_1` and `G000304_2`.
+
+::::: {.panelset}
+
+::: {.panel}
+
+### G000304_1 {.panel-name}
+
+```{r}
+#| hto-heatmap-demuxmix-1, 
+#| fig.cap = "Heatmap of log-normalized HTO counts (library size normalization)
+#|   annotated by `demuxmix()` output. Each row is a HTO, each column a
+#|   droplet.",
+#| fig.asp = 2 / 3
+
+capture <- "G000304_1"
+plotHeatmap(
+  tmp[, tmp$Capture == capture],
+  rownames(tmp),
+  color_columns_by = c("Best", "Confident", "Type", "Prob"), 
+  center = TRUE, 
+  color = hcl.colors(101, "Blue-Red 3"),
+  cluster_rows = FALSE,
+  fontsize = 6,
+  zlim = c(-4, 4),
+  main = capture,
+  cluster_cols = FALSE,
+  column_annotation_colours = list(
+    Best = setNames(
+      # NOTE: Skipping the first colour (white).
+      Polychrome::glasbey.colors(nlevels(tmp$Best) + 1)[-1], 
+      levels(tmp$Best))))
+```
+
+:::
+
+::: {.panel}
+
+### G000304_2 {.panel-name}
+
+```{r}
+#| hto-heatmap-demuxmix-2, 
+#| fig.cap = "Heatmap of log-normalized HTO counts (library size normalization)
+#|   annotated by `demuxmix()` output. Each row is a HTO, each column a
+#|   droplet.",
+#| fig.asp = 2 / 3
+
+capture <- "G000304_2"
+plotHeatmap(
+  tmp[, tmp$Capture == capture],
+  rownames(tmp),
+  color_columns_by = c("Best", "Confident", "Type", "Prob"), 
+  center = TRUE, 
+  color = hcl.colors(101, "Blue-Red 3"),
+  cluster_rows = FALSE,
+  fontsize = 6,
+  zlim = c(-4, 4),
+  main = capture,
+  cluster_cols = FALSE,
+  column_annotation_colours = list(
+    Best = setNames(
+      # NOTE: Skipping the first colour (white).
+      Polychrome::glasbey.colors(nlevels(tmp$Best) + 1)[-1], 
+      levels(tmp$Best))))
+```
+
+:::
+
+:::::
+
+```{r}
+stopifnot(identical(colnames(sce), rownames(demuxmix_df)))
+# Add demuxmix() output as a nested DataFrame to the colData.
+sce$HTO_demuxmix <- demuxmix_df$Best
+sce$demuxmix <- demuxmix_df
+```
+
+```{r}
+#| hto-demultiplexing-demuxmix, 
+#| fig.cap = "Number (top) and proportion (bottom) of droplets assigned to each 
+#|   HTO (by `demuxmix()`), and if these were confidently or not confidently 
+#|   assigned, overall (left) and within each capture (right)."
+
+p1 <- ggplot(as.data.frame(demuxmix_df)) + 
+  geom_bar(
+    aes(
+      x = factor(Best, levels(sce$HTO_demuxmix)), 
+      fill = Confident), 
+    position = position_stack(reverse = TRUE)) + 
+  coord_flip() +
+  ylab("Number of droplets") +
+  xlab("Demuxmix classification") +
+  theme_cowplot(font_size = 7) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+p2 <- ggplot(as.data.frame(demuxmix_df)) + 
+  geom_bar(
+    aes(
+      x = factor(Best, levels(sce$HTO_demuxmix)), 
+      fill = Confident), 
+    position = position_fill(reverse = TRUE)) + 
+  coord_flip() + 
+  ylab("Proportion of droplets") + 
+  xlab("Demuxmix classification") +
+  theme_cowplot(font_size = 7) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+(p1 + 
+    p1 + facet_grid(~sce$Capture) + 
+    plot_layout(widths = c(1, length(capture_names)))) / 
+  (p2 + 
+     p2 + facet_grid(~sce$Capture) + 
+     plot_layout(widths = c(1, length(capture_names)))) +
+  plot_layout(guides = "collect")
+```
+
+Figure \@ref(fig:ls-by-demuxmix) show that the unassigned droplets have less data (in terms of library size) and that multiplet droplets generally have more data than the other droplets.
+This is as we'd expect.
+The cell line has notably more data (in terms of library size), particularly for the GEX (RNA), than the 'real' samples.
+
+```{r}
+ls_df <- data.frame(
+  Capture = sce$Capture,
+  HTO_demuxmix = sce$HTO_demuxmix,
+  ls_rna = colSums(counts(sce)) + 1,
+  ls_hto = colSums(counts(altExp(sce, "HTO"))) + 1,
+  ls_adt = colSums(counts(altExp(sce, "ADT"))) + 1)
+```
+
+```{r}
+#| ls-by-demuxmix,
+#| fig.asp = 1, 
+#| fig.cap = "Library size for each library type per droplet assignment from 
+#|    HTO demultiplexing."
+
+p1 <- ggplot(ls_df, aes(x = HTO_demuxmix, y = ls_rna, colour = HTO_demuxmix)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  theme_cowplot(font_size = 8) +
+  ylab("Library size") +
+  xlab("HTO demultiplexing assignment") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  ggtitle("RNA") +
+  facet_grid(~Capture) +
+  guides(colour = "none")
+p2 <- ggplot(ls_df, aes(x = HTO_demuxmix, y = ls_adt, colour = HTO_demuxmix)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  theme_cowplot(font_size = 8) +
+  ylab("Library size") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  ggtitle("ADT") +
+  facet_grid(~Capture) +
+  guides(colour = "none")
+p3 <- ggplot(ls_df, aes(x = HTO_demuxmix, y = ls_hto, colour = HTO_demuxmix)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  theme_cowplot(font_size = 8) +
+  ylab("Library size") +
+  xlab("HTO demultiplexing assignment") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  ggtitle("HTO") +
+  facet_grid(~Capture) +
+  guides(colour = "none")
+
+p1 + p2 + p3 + plot_layout(ncol = 2) 
+```
+
+# Concluding remarks
+
+The demultiplexed *SingleCellExperiment* object is saved and will be used in downstream analyses, e.g., pre-processing^[Due to file size restrictions, this file is not available from the GitHub repository. It will be made available by alternative means. The md5sum of the file created by rendering of this report is recorded in [`data/md5/`](../data/md5/)].
+
+```{r}
+saveRDSWithMD5(
+  sce,
+  here("extdata", "SCEs", "G000304_Broomfield.demultiplexed.SCE.rds"))
+```
+
+# Additional information {.appendix}
+
+The following are available on request:
+
+- Full CSV tables of any data presented.
+- PDF/PNG files of any static plots.
+
+# Session info {.appendix}
+
+<summary>The analysis and this document were prepared using the following software (click triangle to expand)</summary>
+<details>
+
+```{r}
+sessioninfo::session_info()
+```
+
+# TODOs
+
+- [ ] A fair stack of multiplets!
+- [ ] Nothing assigned to `5916`; why? (perhaps not included in pool).
+- [ ] Remove/clarify use of 'pool' when referring to HTO samples.
+- [ ] Discuss results with SCORE and then Ben and Jo.
+- [ ] Proofread
+- [ ] Use GEX instead of RNA
