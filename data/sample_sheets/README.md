@@ -326,46 +326,46 @@ knitr::kable(y)
 
 ## `HTO_features.csv`
 
-There are 27 pools of samples and each has a unique HTO label.
-Specifically, we used combinatorial HTO labelling whereby each pool is
-labelled with k HTOs (here k=2):
+There are 27 pools of samples (although not all were progresed to
+scRNA-seq) and each has a unique HTO label Specifically, we used
+combinatorial HTO labelling whereby each pool is labelled with k HTOs
+(here k=2):
 
 ``` r
-# TODO: Update once Ben supplies updated sample metadata XLSX.
 sample_metadata_df <- read_excel(
   here("data/sample_sheets/G000304_Broomfield.sample_metadata.xlsx"))
 knitr::kable(sample_metadata_df)
 ```
 
-| Tube | HashTag 1 | HashTag 2 | Sample |
-|-----:|----------:|----------:|:-------|
-|    1 |         1 |         2 | NA     |
-|    2 |         2 |         3 | NA     |
-|    3 |         3 |         4 | NA     |
-|    4 |         4 |         5 | NA     |
-|    5 |         5 |         6 | NA     |
-|    6 |         6 |         7 | NA     |
-|    7 |         7 |         8 | NA     |
-|    8 |         8 |         9 | NA     |
-|    9 |         9 |        10 | NA     |
-|   10 |        10 |        11 | NA     |
-|   11 |        11 |        12 | NA     |
-|   12 |        12 |        13 | NA     |
-|   13 |        13 |        14 | NA     |
-|   14 |        14 |        15 | NA     |
-|   15 |        15 |         1 | NA     |
-|   16 |         1 |         3 | NA     |
-|   17 |         2 |         4 | NA     |
-|   18 |         5 |         7 | NA     |
-|   19 |         6 |         8 | NA     |
-|   20 |         9 |        11 | NA     |
-|   21 |        10 |        12 | NA     |
-|   22 |        13 |        15 | NA     |
-|   23 |         1 |         8 | NA     |
-|   24 |         2 |         9 | NA     |
-|   25 |         3 |        10 | NA     |
-|   26 |         4 |        14 | NA     |
-|   27 |         5 |        12 | NA     |
+| Tube | HashTag 1 | HashTag 2 | Sample    | Progressed to scRNA-seq |
+|-----:|----------:|----------:|:----------|:------------------------|
+|    1 |         1 |         2 | 5899      | TRUE                    |
+|    2 |         2 |         3 | 5900      | TRUE                    |
+|    3 |         3 |         4 | 5901      | TRUE                    |
+|    4 |         4 |         5 | NA        | FALSE                   |
+|    5 |         5 |         6 | 5903      | TRUE                    |
+|    6 |         6 |         7 | 5904      | TRUE                    |
+|    7 |         7 |         8 | 5905      | TRUE                    |
+|    8 |         8 |         9 | 5906      | TRUE                    |
+|    9 |         9 |        10 | 5908      | TRUE                    |
+|   10 |        10 |        11 | 5909      | TRUE                    |
+|   11 |        11 |        12 | 5910      | TRUE                    |
+|   12 |        12 |        13 | NA        | FALSE                   |
+|   13 |        13 |        14 | 5914      | TRUE                    |
+|   14 |        14 |        15 | 5915      | TRUE                    |
+|   15 |        15 |         1 | 5916      | TRUE                    |
+|   16 |         1 |         3 | NA        | FALSE                   |
+|   17 |         2 |         4 | NA        | FALSE                   |
+|   18 |         5 |         7 | NA        | FALSE                   |
+|   19 |         6 |         8 | 5912      | TRUE                    |
+|   20 |         9 |        11 | 5913      | TRUE                    |
+|   21 |        10 |        12 | NA        | FALSE                   |
+|   22 |        13 |        15 | 5921      | TRUE                    |
+|   23 |         1 |         8 | 5922      | TRUE                    |
+|   24 |         2 |         9 | 5923      | TRUE                    |
+|   25 |         3 |        10 | 5924      | TRUE                    |
+|   26 |         4 |        14 | 5925      | TRUE                    |
+|   27 |         5 |        12 | Cell line | TRUE                    |
 
 Based on this, I constructed a `HTO_features.csv` file for use with
 **CellRanger**.

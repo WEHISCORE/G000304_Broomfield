@@ -50,11 +50,10 @@ knitr::kable(y)
 
 ## `HTO_features.csv`
 
-There are 27 pools of samples and each has a unique HTO label.
+There are 27 pools of samples (although not all were progresed to scRNA-seq) and each has a unique HTO label
 Specifically, we used combinatorial HTO labelling whereby each pool is labelled with k HTOs (here k=2):
 
 ```{r}
-# TODO: Update once Ben supplies updated sample metadata XLSX.
 sample_metadata_df <- read_excel(
   here("data/sample_sheets/G000304_Broomfield.sample_metadata.xlsx"))
 knitr::kable(sample_metadata_df)
