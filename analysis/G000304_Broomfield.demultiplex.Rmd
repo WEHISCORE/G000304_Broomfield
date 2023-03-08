@@ -44,8 +44,6 @@ There are 27 samples (although not all were progressed to scRNA-seq) and each ha
 We used combinatorial HTO labelling whereby each sample is labelled with k HTOs (here k=2), shown below:
 
 ```{r}
-# TODO: How to handle samples that didn't progress? Keep them in for now to 
-#       double-check in HTO demuxing.
 sample_metadata_df <- read_excel(
   here("data/sample_sheets/G000304_Broomfield.sample_metadata.xlsx"))
 
@@ -66,13 +64,16 @@ hashtag_pool_df <- unique(sample_metadata_df[, c("Sample", "Hashtag(s)")])
 hashtag_pool_df <- hashtag_pool_df[order(hashtag_pool_df$Sample), ]
 
 # A bunch of faffing to get the table to print as I want.
-# TODO: Want actual sample IDs for `removed_*` samples.
 hashtag_pool_df |>
   dplyr::group_by(Sample) |>
   dplyr::mutate(
     `Hashtag(s)` = paste0(unlist(`Hashtag(s)`), collapse =  ",")) |>
   knitr::kable()
 ```
+
+<aside>
+The `removed_*` samples denote those samples that did not progress to scRNA-seq (according to Ben).
+</aside>
 
 We want to demultiplex the droplets using the HTO data.
 
@@ -256,7 +257,7 @@ panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...) {
   txt <- format(c(r, 0.123456789), digits = digits)[1]
   txt <- paste0(prefix, txt)
   if (missing(cex.cor)) cex.cor <- 0.8 / strwidth(txt)
-  text(0.5, 0.5, txt, cex = cex.cor * r)
+  text(0.5, 0.5, txt, cex = cex.cor * abs(r))
 }
 
 # NOTE: A modified .smoothScatter() to allow desired specification of xlim and 
@@ -369,9 +370,9 @@ xmax <- ceiling(log2(max(counts(altExp(sce, "HTO"))) + 1))
 
 ::: {.panel}
 
-**TODO** Need to re-write because HTOs are reused so the diagonal is less strong and harder to interpret.
+Figures \@ref(fig:hto-scatterplot-matrix-1) - \@ref(fig:hto-scatterplot-matrix-2) show that the HTO data are good-quality (e.g., good separation of background and signal in the histograms along the diagonal of these figures, reasonably high correlation of paired HTOs^[1]).
 
-Figures \@ref(fig:hto-scatterplot-matrix-1) - \@ref(fig:hto-scatterplot-matrix-2) show that the HTO data are high-quality (e.g., good separation of background and signal in the histograms along the diagonal of these figures, high correlation of paired HTOs).
+^[1]: Because HTOs are reused across samples (e.g., `Mouse_HTO_2` is used in labelling both sample `5899` and `5900`), the correlations are not as high as they would otherwise be.
 
 ### G000304_1 {.panel-name}
 
@@ -508,8 +509,8 @@ knitr::kable(valid_hto_combos_df, caption = "Valid HTO combinations.")
 **TODO** Re-write
 
 Here, we have used **demuxmix**'s default acceptance probability of `pAcpt` $= 0.9 ^ {n_{HTOs}}$ = `r round(0.9^nrow(hto), 2)`.
-We might consider increasing the acceptance probability, e.g., to `pAcpt` $= 0.9 ^ {n_{HTO pools}}$ = `r round(0.9^length(unique(valid_hto_combos_df$Pool)), 2)`.
-However, increasing the acceptance probability will increase the number of `uncertain` or `negative`-assigned droplets, in this case from `r scales::number(sum(demuxmix_df$Prob < 0.9^nrow(hto)), big.mark = ",")` to `r scales::number(sum(demuxmix_df$Prob < 0.9^length(unique(valid_hto_combos_df$Pool))), big.mark = ",")`.
+We might consider decreasing the acceptance probability, e.g., to `pAcpt` $= 0.9 ^ {n_{HTO pools}}$ = `r round(0.9^length(unique(valid_hto_combos_df$Pool)), 2)`.
+However, decreasing the acceptance probability will decrease the number of `uncertain` or `negative`-assigned droplets, in this case from `r scales::number(sum(demuxmix_df$Prob < 0.9^nrow(hto)), big.mark = ",")` to `r scales::number(sum(demuxmix_df$Prob < 0.9^length(unique(valid_hto_combos_df$Pool))), big.mark = ",")`.
 
 <aside>
 Please see [https://github.com/huklein/demuxmix/issues/2#issuecomment-1241026309](https://github.com/huklein/demuxmix/issues/2#issuecomment-1241026309) for a discussion on the default acceptance probability and the effect of changing it.
@@ -521,7 +522,10 @@ demuxmix_df$Best <- factor(
     demuxmix_df$HTO %in% valid_hto_combos_df$HTO,
     valid_hto_combos_df[
       match(demuxmix_df$HTO, valid_hto_combos_df$HTO), "Pool"],
-    demuxmix_df$Type),
+    ifelse(
+      demuxmix_df$Type == "singlet",
+      "uncertain",
+      demuxmix_df$Type)),
   levels = c(
     unique(valid_hto_combos_df$Pool), 
     "multiplet", "negative", "uncertain"))
@@ -828,3 +832,4 @@ sessioninfo::session_info()
 - [ ] Discuss results with SCORE and then Ben and Jo.
 - [ ] Proofread
 - [ ] Use GEX instead of RNA
+- [ ] Unknown HTO combination is the 3rd most frequent (HTOs 1 & 15); see EDA_HTO.R
