@@ -156,6 +156,23 @@ hist(
 
 # Summary: P-value distributions all look fine.
 
+# emptyDrops() applied to HTO and/or ADT ---------------------------------------
+
+# TODO: A quick exploration yielded the following:
+# > sapply(list_of_empties, function(e) sum(e$FDR < 0.0001, na.rm = TRUE))
+# G000304_1 G000304_2
+# 18069     17021
+# > sapply(list_of_empties_hto, function(e) sum(e$FDR < 0.0001, na.rm = TRUE))
+# G000304_1 G000304_2
+# 10503     13158
+# > sapply(list_of_empties_adt, function(e) sum(e$FDR < 0.0001, na.rm = TRUE))
+# G000304_1 G000304_2
+# 49678     53768
+#
+# The barcode plots for ADT look funky and estimation of the knee and/or
+# inflection could probably be improved.
+#
+
 # Summary ----------------------------------------------------------------------
 
 # I can't detect anything unusual in the application of emptyDrops(). It seems
