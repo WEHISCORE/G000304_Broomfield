@@ -328,7 +328,6 @@ plotHeatmap(
 
 # What are the 'others' --------------------------------------------------------
 
-
 # After valid 13,15 pair, most common is 13,14,15 which could be doublets of
 # (13,15) and (13, 14) or (13, 15) and (14, 15).
 sort(table(grep("Mouse_HTO_13", grep("Mouse_HTO_15", tmp$HTO, value = TRUE), value = TRUE)))
